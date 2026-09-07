@@ -1,4 +1,4 @@
-import type { GridState, PredictionResult, InterventionResult, SimulationConfig } from "./types";
+import type { GridState, GridNode, PredictionResult, InterventionResult, SimulationConfig } from "./types";
 import { buildHealthyScenario, buildStressScenario, buildMitigatedScenario } from "./mockData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -36,6 +36,12 @@ export const api = {
       console.warn("Failed to fetch /api/grid/topology from backend, falling back to cached baseline:", e);
       return buildHealthyScenario().gridState;
     }
+  },
+
+  async getLiveGrid(): Promise<{ grid_state: GridState; model_output: PredictionResult; last_updated: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/live/grid`);
+    if (!res.ok) throw new Error(`Live grid unavailable (HTTP ${res.status})`);
+    return res.json();
   },
 
   async predict(state: GridState): Promise<PredictionResult> {
@@ -141,6 +147,15 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || `Alert update failed (HTTP ${res.status})`);
+    return data;
+  },
+
+  async updateGridNode(nodeId: string, changes: Partial<Pick<GridNode["features"], "load_pct" | "voltage_pu" | "temperature_c">>): Promise<{ node: GridNode; warning: boolean; message: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/admin/grid/nodes/${encodeURIComponent(nodeId)}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `Node update failed (HTTP ${res.status})`);
     return data;
   }
 };

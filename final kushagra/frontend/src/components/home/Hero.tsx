@@ -1,120 +1,54 @@
 "use client";
+
 import Link from "next/link";
-import { ArrowRight, MapPin, Info } from "lucide-react";
+import { ArrowUpRight, Crosshair, Radio, Sparkles } from "lucide-react";
+import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
 
-interface HeroProps {
-  animated?: boolean;
-}
+const heroTransition = { duration: 0.9, ease: [0.16, 1, 0.3, 1] } as const;
 
-export function Hero({ animated = true }: HeroProps) {
+export function Hero() {
+  const reduceMotion = useReducedMotion();
+  const pointerX = useMotionValue(0);
+  const pointerY = useMotionValue(0);
+  const lensX = useSpring(pointerX, { stiffness: 52, damping: 24, mass: 0.8 });
+  const lensY = useSpring(pointerY, { stiffness: 52, damping: 24, mass: 0.8 });
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    if (reduceMotion) return;
+    pointerX.set((event.clientX / window.innerWidth - 0.5) * 14);
+    pointerY.set((event.clientY / window.innerHeight - 0.5) * 10);
+  };
+
   return (
-    <section className="gs-hero relative min-h-screen bg-gs-bg-primary flex items-center justify-center overflow-hidden">
-      {/* Background video */}
-      <video
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        src="/gridsense-hero.mp4"
-        autoPlay
-        muted
-        playsInline
-        preload="auto"
-        aria-hidden="true"
-      />
+    <section className="gs-landing gs-orbit-hero relative isolate min-h-[100dvh] overflow-hidden bg-gs-bg-primary text-gs-text-primary" onPointerMove={handlePointerMove}>
+      <motion.video className="gs-landing-video absolute inset-0 h-full w-full object-cover" src="/gridsense-hero.mp4" autoPlay muted loop playsInline preload="auto" aria-label="Animated GridSense globe and national grid network" style={reduceMotion ? undefined : { x: lensX, y: lensY }} />
+      <div className="gs-landing-scrim absolute inset-0 pointer-events-none" aria-hidden="true" />
+      <div className="gs-orbit-lines absolute inset-0 pointer-events-none" aria-hidden="true" />
+      <div className="gs-landing-grain fixed inset-0 z-0 pointer-events-none" aria-hidden="true" />
 
-      {/* Subtle grid backdrop */}
-      <div
-        className="absolute inset-0 opacity-20"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(37,183,211,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(37,183,211,0.06) 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
-        }}
-      />
+      <motion.div className="gs-globe-brand pointer-events-none absolute inset-x-0 top-[clamp(5.8rem,12vh,8.5rem)] z-[2] mx-auto w-fit text-center" initial={reduceMotion ? false : { opacity: 0, y: -18 }} animate={{ opacity: 1, y: 0 }} transition={{ ...heroTransition, delay: 0.18 }} style={reduceMotion ? undefined : { x: lensX }}>
+        <span className="gs-globe-brand-kicker">National grid intelligence</span>
+        <span className="gs-globe-brand-title">GridSense</span>
+        <span className="gs-globe-brand-rule" />
+      </motion.div>
 
-      {/* Radial glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] rounded-full opacity-30"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(37,183,211,0.25) 0%, transparent 60%)",
-          }}
-        />
-      </div>
-
-      <div className="relative z-10 container-official text-center py-24">
-        {/* Small badge */}
-        <div
-          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gs-bg-panel border border-gs-border text-xs font-mono uppercase tracking-widest text-gs-text-secondary mb-8 ${
-            animated ? "animate-fade-in" : ""
-          }`}
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-gs-green-500 animate-pulse-dot" />
-          <span>National Grid Intelligence Platform</span>
-        </div>
-
-        {/* Main title */}
-        <h1
-          className={`text-white text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold tracking-tight text-institutional mb-6 ${
-            animated ? "animate-title-reveal" : ""
-          }`}
-        >
-          GRID<span className="text-gs-cyan-400 animate-subtle-glow">SENSE</span>
-        </h1>
-
-        {/* Subtitle */}
-        <div
-          className={animated ? "animate-fade-in-up" : ""}
-          style={animated ? { animationDelay: "0.5s", opacity: 0 } : {}}
-        >
-          <p className="text-gs-text-secondary text-lg md:text-xl font-light tracking-wide mb-2">
-            AI-POWERED GRID INTELLIGENCE
-          </p>
-          <p className="text-gs-text-tertiary text-base md:text-lg italic max-w-2xl mx-auto mb-10">
-            "Predicting risk before disruption becomes failure."
-          </p>
-        </div>
-
-        {/* Buttons */}
-        <div
-          className={`flex flex-col sm:flex-row items-center justify-center gap-3 ${
-            animated ? "animate-fade-in-up" : ""
-          }`}
-          style={animated ? { animationDelay: "0.9s", opacity: 0 } : {}}
-        >
-          <Link
-            href="/map-explorer"
-            className="group inline-flex items-center gap-2 px-7 py-3 bg-gs-blue-500 hover:bg-gs-blue-600 text-white font-medium rounded-md transition-all shadow-lg shadow-gs-blue-500/20"
-          >
-            Explore Grid
-            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-          </Link>
-          <Link
-            href="/map-explorer"
-            className="inline-flex items-center gap-2 px-7 py-3 bg-gs-bg-panel hover:bg-gs-bg-elevated border border-gs-border hover:border-gs-cyan-500/50 text-gs-text-primary font-medium rounded-md transition-all"
-          >
-            <MapPin className="w-4 h-4" />
-            Map Explorer
-          </Link>
-          <Link
-            href="/about"
-            className="inline-flex items-center gap-2 px-5 py-3 text-gs-text-secondary hover:text-white font-medium transition-colors"
-          >
-            <Info className="w-4 h-4" />
-            Learn about GridSense
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      </div>
-
-      {/* Bottom scroll cue */}
-      <div
-        className={`absolute bottom-8 left-1/2 -translate-x-1/2 text-gs-text-tertiary text-[10px] font-mono tracking-widest ${
-          animated ? "animate-fade-in" : ""
-        }`}
-        style={animated ? { animationDelay: "1.5s", opacity: 0 } : {}}
-      >
-        SCROLL TO EXPLORE ↓
+      <div className="relative z-10 mx-auto grid min-h-[100dvh] max-w-[1440px] items-end gap-8 px-5 pb-8 pt-28 sm:px-8 sm:pb-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:px-12 lg:pb-12">
+        <motion.div className="max-w-2xl" initial={reduceMotion ? false : { opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ ...heroTransition, delay: 0.1 }}>
+          <p className="mb-5 flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gs-cyan-300"><Radio className="h-3.5 w-3.5" strokeWidth={1.8} /> Live grid command surface</p>
+          <h1 className="gs-landing-title gs-display max-w-[720px] text-balance text-[clamp(3.3rem,5.2vw,5.7rem)] font-bold uppercase leading-[0.9] tracking-[-0.065em]">Read risk.<br />Route resilience.</h1>
+          <p className="mt-6 max-w-md text-base leading-relaxed text-gs-text-secondary sm:text-lg">A connected view of grid health, cascading risk and the next operational decision.</p>
+          <div className="mt-7 flex flex-wrap gap-3 sm:mt-8"><Link href="/map-explorer" className="gs-landing-primary inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98]">Enter GridSense <ArrowUpRight className="h-4 w-4" strokeWidth={2} /></Link><Link href="/intelligence" className="gs-landing-secondary inline-flex items-center rounded-full border px-5 py-3 text-sm font-semibold backdrop-blur-md transition-colors active:scale-[0.98]">View ML intelligence</Link></div>
+        </motion.div>
+        <motion.aside className="gs-hero-instrument hidden lg:block" initial={reduceMotion ? false : { opacity: 0, x: 22 }} animate={{ opacity: 1, x: 0 }} transition={{ ...heroTransition, delay: 0.35 }} aria-label="GridSense system capabilities">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3"><span className="font-mono text-[10px] font-bold uppercase tracking-[.13em] text-gs-text-secondary">System layer</span><Crosshair className="h-4 w-4 text-gs-cyan-300" strokeWidth={1.5} /></div>
+          <div className="space-y-4 py-4"><InstrumentRow label="Topology" value="Mapped" /><InstrumentRow label="Risk model" value="Active" /><InstrumentRow label="Cascades" value="Simulated" /></div>
+          <div className="flex items-center gap-2 border-t border-white/10 pt-3 font-mono text-[10px] uppercase tracking-[.12em] text-gs-cyan-300"><Sparkles className="h-3.5 w-3.5" strokeWidth={1.6} /> Decision support online</div>
+        </motion.aside>
       </div>
     </section>
   );
+}
+
+function InstrumentRow({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-baseline justify-between gap-4"><span className="text-xs text-gs-text-secondary">{label}</span><span className="font-mono text-[10px] font-bold uppercase tracking-[.08em] text-gs-text-primary">{value}</span></div>;
 }

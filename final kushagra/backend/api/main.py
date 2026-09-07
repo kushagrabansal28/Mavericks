@@ -36,7 +36,7 @@ except Exception:
     except Exception:
         CANNED_SCENARIOS = {}
 
-from backend.schemas import (
+from .schemas import (
     GridNodeSchema, GridEdgeSchema, GridStateSchema,
     PredictionResultSchema, InterventionResultSchema,
     SimulateRequest, InterveneRequest, PhysicsSanitySchema,
@@ -95,6 +95,9 @@ METRICS_JSON = os.path.join(ROOT_DIR, "results", "metrics.json")
 SYNTHETIC_GRID_JSON = os.path.join(DATASET_DIR, "india_synthetic_demo_grid.json")
 ALERT_WORKFLOW_JSON = os.path.join(ROOT_DIR, "results", "alert_workflow.json")
 ALERT_LOCK = Lock()
+GRID_OVERRIDES_JSON = os.path.join(ROOT_DIR, "results", "grid_node_overrides.json")
+GRID_OVERRIDE_LOCK = Lock()
+LIVE_TELEMETRY_EPOCH = datetime.now(timezone.utc).timestamp()
 
 # Cached Baseline Grid
 CACHED_GRID_NODES: List[Dict[str, Any]] = []
@@ -106,6 +109,61 @@ TELEMETRY_CACHE: List[Dict[str, Any]] = []
 OPTIMIZATION_CACHE: List[Dict[str, Any]] = []
 FULL_NODE_LOOKUP: Dict[str, Dict[str, Any]] = {}
 ASSET_PROFILES_CACHE: List[Dict[str, Any]] = []
+
+def _read_grid_overrides() -> Dict[str, Dict[str, float]]:
+    try:
+        with open(GRID_OVERRIDES_JSON, "r", encoding="utf-8") as file:
+            data = json.load(file)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {}
+
+def _write_grid_overrides(overrides: Dict[str, Dict[str, float]]) -> None:
+    os.makedirs(os.path.dirname(GRID_OVERRIDES_JSON), exist_ok=True)
+    temporary = f"{GRID_OVERRIDES_JSON}.tmp"
+    with open(temporary, "w", encoding="utf-8") as file:
+        json.dump(overrides, file, indent=2)
+    os.replace(temporary, GRID_OVERRIDES_JSON)
+
+def _apply_grid_overrides(grid: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a smooth, deterministic live telemetry snapshot from saved settings."""
+    with GRID_OVERRIDE_LOCK:
+        overrides = _read_grid_overrides()
+    nodes = []
+    for raw_node in grid["nodes"]:
+        node = dict(raw_node)
+        features = dict(node.get("features", {}))
+        saved = overrides.get(str(node.get("id")), {})
+        for field in ("load_pct", "voltage_pu", "temperature_c"):
+            if field in saved:
+                features[field] = saved[field]
+        elapsed = datetime.now(timezone.utc).timestamp() - LIVE_TELEMETRY_EPOCH
+        phase = (zlib.crc32(str(node.get("id")).encode()) % 628) / 100.0
+        base_load = float(features.get("load_pct", 0.0))
+        base_voltage = float(features.get("voltage_pu", 1.0))
+        base_temp = float(features.get("temperature_c", 25.0))
+        # A 64-second smooth operating cycle is visible on the five-second UI
+        # poll without creating implausible jumps in electrical telemetry.
+        load_delta = base_load * 0.015 * math.sin(elapsed / 8.0 + phase)
+        load = max(0.0, min(130.0, base_load + load_delta))
+        voltage = max(0.80, min(1.15, base_voltage - load_delta * 0.0008 + 0.002 * math.sin(elapsed / 24.0 + phase)))
+        temperature = max(-20.0, min(160.0, base_temp + load_delta * 0.28 + 0.35 * math.sin(elapsed / 20.0 + phase)))
+        features.update({"load_pct": round(load, 1), "voltage_pu": round(voltage, 3), "temperature_c": round(temperature, 1)})
+        node["features"] = features
+        load = float(features.get("load_pct", 0))
+        voltage = float(features.get("voltage_pu", 1))
+        temperature = float(features.get("temperature_c", 0))
+        risk = max(0.01, min(0.99, 0.04 + max(0.0, load - 65.0) / 45.0 * 0.50 + max(0.0, 0.98 - voltage) * 6.0 + max(0.0, temperature - 70.0) / 35.0 * 0.28))
+        node["risk_score"] = round(risk, 3)
+        if load >= 105 or voltage <= 0.90 or temperature >= 100 or risk >= 0.70:
+            node["status"] = "critical"
+        elif load >= 90 or voltage <= 0.94 or temperature >= 85 or risk >= 0.35:
+            node["status"] = "warning"
+        else:
+            node["status"] = "healthy"
+        nodes.append(node)
+    active_ids = {str(node["id"]) for node in nodes}
+    return {**grid, "nodes": nodes, "edges": [dict(edge) for edge in grid["edges"] if edge["source"] in active_ids and edge["target"] in active_ids]}
 
 def _read_alerts() -> Dict[str, Dict[str, Any]]:
     """Read the demo alert workflow state. This is deliberately local-only."""
@@ -315,7 +373,7 @@ async def upload_custom_dataset(request: Request):
 @app.get("/api/health")
 def health_check():
     """Health status and model loading confirmation."""
-    has_weights = os.path.exists(os.path.join(ROOT_DIR, "models", "gridsense_gnn.pt"))
+    has_weights = os.path.exists(os.path.join(ROOT_DIR, "ml", "trained_models", "gridsense_gnn.pt")) or os.path.exists(os.path.join(ROOT_DIR, "models", "gridsense_gnn.pt"))
     return {
         "status": "online",
         "system": "GridSense Power-Grid Cascade AI",
@@ -331,19 +389,19 @@ def health_check():
 @app.get("/api/grid/nodes")
 def get_grid_nodes():
     """Returns actual grid nodes with features and positions."""
-    grid = get_unified_grid()
+    grid = _apply_grid_overrides(get_unified_grid())
     return grid["nodes"]
 
 @app.get("/api/grid/edges")
 def get_grid_edges():
     """Returns actual grid network connections."""
-    grid = get_unified_grid()
+    grid = _apply_grid_overrides(get_unified_grid())
     return grid["edges"]
 
 @app.get("/api/grid/node/{node_id}")
 def get_node_detail(node_id: str):
     """Returns available telemetry and topology for a selected node."""
-    grid = get_unified_grid()
+    grid = _apply_grid_overrides(get_unified_grid())
     for n in grid["nodes"]:
         if n["id"].upper() == node_id.upper():
             # Find connected edges
@@ -362,7 +420,7 @@ def get_node_detail(node_id: str):
 @app.get("/api/grid")
 def get_grid_topology():
     """Returns baseline healthy grid state matching the GridState contract."""
-    grid = get_unified_grid()
+    grid = _apply_grid_overrides(get_unified_grid())
     nodes = grid["nodes"]
     edges = grid["edges"]
     
@@ -385,11 +443,92 @@ def get_grid_topology():
         "grid_id": "india_national_grid",
         "nodes": nodes,
         "edges": edges,
-        "overall_health_pct": 98.7,
+        "overall_health_pct": round(max(0.0, 100.0 - max((node.get("risk_score", 0.05) for node in nodes), default=0.05) * 20.0), 1),
         "total_load_mw": round(total_load, 1),
         "total_capacity_mw": round(total_cap, 1),
         "regional_health": regional_health
     }
+
+@app.get("/api/live/grid")
+def get_live_grid():
+    """One authoritative polling payload for map, alerts, inspector and cascade UI."""
+    grid_state = get_grid_topology()
+    # The smooth telemetry state is the input to the trained graph model, not a
+    # second UI-only risk calculator.  Blend the calibrated operating-envelope
+    # score with GNN probability so a model artefact cannot hide an electrical
+    # threshold violation, while graph neighbourhood information still affects
+    # root-cause and propagation analysis.
+    gnn_output = predictor.predict({"nodes": grid_state["nodes"], "edges": grid_state["edges"]})
+    node_risk = {
+        node["id"]: round(min(0.99, max(0.01, 0.65 * float(node.get("risk_score", 0.01)) + 0.35 * float(gnn_output["node_risk"].get(node["id"], 0.01)))), 3)
+        for node in grid_state["nodes"]
+    }
+    ranked = sorted(node_risk.items(), key=lambda item: item[1], reverse=True)
+    root_id, root_risk = ranked[0] if ranked else (None, 0.0)
+    cascade_steps = root_cause_analyzer.trace_cascade_path(
+        initiating_node=root_id, node_risks=node_risk, grid_state=grid_state, max_hops=5
+    ) if root_id and root_risk >= 0.20 else []
+    cascade_ids = [step["node_id"] for step in cascade_steps]
+    for node in grid_state["nodes"]:
+        risk = node_risk[node["id"]]
+        node["risk_score"] = risk
+        node["is_root_cause"] = node["id"] == root_id and root_risk >= 0.20
+        node["is_in_cascade"] = node["id"] in cascade_ids
+        if node["is_root_cause"]:
+            node["status"] = "root_cause"
+        elif risk >= 0.70:
+            node["status"] = "critical"
+        elif risk >= 0.30:
+            node["status"] = "warning"
+        else:
+            node["status"] = "healthy"
+    cascade_pairs = {frozenset((cascade_ids[index], cascade_ids[index + 1])) for index in range(len(cascade_ids) - 1)}
+    for edge in grid_state["edges"]:
+        is_cascade_edge = frozenset((edge["source"], edge["target"])) in cascade_pairs
+        edge["is_cascade_path"] = is_cascade_edge
+        edge["status"] = "cascade_path" if is_cascade_edge else edge.get("status", "normal")
+    model_output = {
+        "node_risk": node_risk,
+        "root_cause_ranking": root_cause_analyzer.rank_root_causes(grid_state, node_risk, initiating_hint=root_id)[:5] if root_id and root_risk >= 0.20 else [],
+        "cascade_path": cascade_ids,
+        "cascade_risk_pct": round(root_risk * 100, 1),
+        "time_to_critical_hours": {node_id: round(max(0.5, 24.0 * (1.0 - risk)), 1) for node_id, risk in node_risk.items()},
+        "confidence_interval": {"lower": max(0.0, round(root_risk * 100 - 8, 1)), "upper": min(100.0, round(root_risk * 100 + 8, 1))},
+    }
+    return {"grid_state": grid_state, "model_output": model_output, "last_updated": grid_state["timestamp"]}
+
+@app.put("/api/admin/grid/nodes/{node_id}")
+async def update_grid_node_from_admin(node_id: str, request: Request):
+    """Persist demo operator adjustments so all fresh map snapshots use them."""
+    payload = await request.json()
+    allowed_ranges = {
+        "load_pct": (0.0, 130.0),
+        "voltage_pu": (0.80, 1.15),
+        "temperature_c": (-20.0, 160.0),
+    }
+    changes: Dict[str, float] = {}
+    for field, (minimum, maximum) in allowed_ranges.items():
+        if field not in payload:
+            continue
+        value = _numeric(payload[field], float("nan"))
+        if not math.isfinite(value) or not minimum <= value <= maximum:
+            raise HTTPException(status_code=422, detail=f"{field} must be between {minimum} and {maximum}.")
+        changes[field] = round(value, 3 if field == "voltage_pu" else 1)
+    if not changes:
+        raise HTTPException(status_code=422, detail="Provide load_pct, voltage_pu, or temperature_c.")
+    grid = _apply_grid_overrides(get_unified_grid())
+    if not any(str(node.get("id")).upper() == node_id.upper() for node in grid["nodes"]):
+        raise HTTPException(status_code=404, detail=f"Grid node {node_id} not found.")
+    with GRID_OVERRIDE_LOCK:
+        overrides = _read_grid_overrides()
+        current = dict(overrides.get(node_id, {}))
+        current.update(changes)
+        overrides[node_id] = current
+        _write_grid_overrides(overrides)
+    updated = _apply_grid_overrides(get_unified_grid())
+    node = next(node for node in updated["nodes"] if str(node.get("id")).upper() == node_id.upper())
+    warning = node.get("status") in {"warning", "critical"}
+    return {"node": node, "warning": warning, "message": "Warning threshold reached." if warning else "Node settings saved."}
 
 @app.post("/api/predict/cascade")
 @app.post("/api/simulate")
@@ -398,7 +537,7 @@ def run_cascade_simulation(req: SimulateRequest):
     Executes live GNN inference, causal root-cause ranking, conformal uncertainty,
     cascade propagation tracing, and physics validation on a stressed grid state.
     """
-    grid = get_unified_grid()
+    grid = _apply_grid_overrides(get_unified_grid())
     nodes = [dict(n) for n in grid["nodes"]]
     edges = [dict(e) for e in grid["edges"]]
 
@@ -603,7 +742,7 @@ def evaluate_intervention(req: InterveneRequest):
 
     # 2. Run Mitigated (After)
     # Mitigate load on target asset
-    grid = get_unified_grid()
+    grid = _apply_grid_overrides(get_unified_grid())
     nodes = [dict(n) for n in grid["nodes"]]
     edges = [dict(e) for e in grid["edges"]]
 

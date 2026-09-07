@@ -22,9 +22,13 @@ class RiskPredictor:
         self.device = torch.device("cpu")
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if model_path is None:
-            model_path = os.path.join(base_dir, "models", "gridsense_gnn.pt")
+            # Releases package model artefacts under ml/trained_models; keep the
+            # historical models directory as a compatible development fallback.
+            packaged_model = os.path.join(base_dir, "ml", "trained_models", "gridsense_gnn.pt")
+            model_path = packaged_model if os.path.exists(packaged_model) else os.path.join(base_dir, "models", "gridsense_gnn.pt")
         if norm_path is None:
-            norm_path = os.path.join(base_dir, "models", "feature_norm.json")
+            packaged_norm = os.path.join(base_dir, "ml", "trained_models", "feature_norm.json")
+            norm_path = packaged_norm if os.path.exists(packaged_norm) else os.path.join(base_dir, "models", "feature_norm.json")
 
         self.in_channels = len(FEATURE_COLS)
         self.model = GridSenseGNN(

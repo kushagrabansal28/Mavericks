@@ -38,7 +38,6 @@ const GridApp = (() => {
     // ── INDIA NATIONAL GRID CORE STRATEGIC ASSETS ──
     "T17": { lat: 19.9975, lng: 73.7898, name: "Nashik Heavy Step-Down T17", city: "Nashik, Maharashtra", category: "Transformer" },
     "F8": { lat: 19.2500, lng: 73.8300, name: "Feeder F8 Nashik-Pune Corridor", city: "Maharashtra", category: "Feeder" },
-    "T21": { lat: 18.5204, lng: 73.8567, name: "Pune Step-Down Transformer T21", city: "Pune, Maharashtra", category: "Transformer" },
     "S4": { lat: 18.5204, lng: 73.8567, name: "Pune 400kV Grid Substation S4", city: "Pune, Maharashtra", category: "Substation" },
     "S3": { lat: 19.0760, lng: 72.8777, name: "Mumbai Central Grid Substation S3", city: "Mumbai, Maharashtra", category: "Substation" },
     "S1": { lat: 28.6139, lng: 77.2090, name: "Delhi 400kV Super Grid Substation S1", city: "Delhi (NCR)", category: "Substation" },
@@ -104,15 +103,19 @@ const GridApp = (() => {
     window.addEventListener("storage", (event) => {
       if (event.key === "gridsense-theme") applyTheme(event.newValue || "dark");
     });
+    // The embedded explorer shares its parent's visual system. Storage events
+    // do not fire in every same-window iframe configuration, so accept the
+    // explicit, same-origin message emitted by the application shell as well.
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin || event.data?.type !== "gridsense-theme") return;
+      applyTheme(event.data.theme);
+    });
 
     initLeafletMap();
     startClock();
     startLiveTelemetryStream();
     setupEventListeners();
     loadDatasetMenus();
-    loadRealtimeTransformerFeed();
-    window.setInterval(loadRealtimeTransformerFeed, 5000);
-
     const customGrid = readCustomGrid();
     if (customGrid) {
       renderState(customGrid, buildCustomPrediction(customGrid));
@@ -120,20 +123,8 @@ const GridApp = (() => {
       return;
     }
 
-    // Load initial scenario (T17 Overload Pitch Scenario)
-    try {
-      const resp = await fetch(`${API_BASE}/api/scenarios/scenario_t17_overload`);
-      if (resp.ok) {
-        const scenarioData = await resp.json();
-        state.scenarios["scenario_t17_overload"] = scenarioData;
-        loadScenarioData(scenarioData);
-      } else {
-        await fetchInitialTopology();
-      }
-    } catch (e) {
-      console.warn("Using fallback initial topology", e);
-      await fetchInitialTopology();
-    }
+    await fetchInitialTopology();
+    window.setInterval(fetchInitialTopology, 5000);
   }
 
   /**
@@ -253,28 +244,29 @@ const GridApp = (() => {
   }
 
   async function loadRealtimeTransformerFeed() {
-    const list = document.getElementById("realtime-transformer-list");
-    const source = document.getElementById("realtime-transformer-source");
+    const list = document.getElementById("alerts-container");
+    const source = document.getElementById("alert-count-badge");
     if (!list) return;
     try {
       const response = await fetch(`${API_BASE}/api/realtime/transformers?limit=12`);
       if (!response.ok) throw new Error(`Transformer feed request failed (${response.status})`);
       const feed = await response.json();
       renderRealtimeTransformers(feed);
-      if (source) source.innerText = `Updated ${new Date(feed.timestamp).toLocaleTimeString()} · simulated`;
+      if (source) source.innerText = `${feed.transformers.filter((item) => item.status !== "STABLE").length} LIVE ALERTS`;
     } catch (error) {
-      if (source) source.innerText = "Transformer feed unavailable";
+      if (source) source.innerText = "FEED UNAVAILABLE";
       console.warn("Realtime transformer feed unavailable.", error);
     }
   }
 
   function renderRealtimeTransformers(feed) {
-    const list = document.getElementById("realtime-transformer-list");
+    const list = document.getElementById("alerts-container");
     if (!list) return;
     const transformers = feed.transformers || [];
-    list.innerHTML = transformers.map((item) => {
+    const alerts = transformers.filter((item) => item.status !== "STABLE");
+    list.innerHTML = (alerts.length ? alerts : transformers.slice(0, 3)).map((item) => {
       const statusClass = item.status === "BLACKOUT RISK" ? "border-rose-600 bg-rose-950/50 text-rose-200" : item.status === "CRITICAL" ? "border-amber-600 bg-amber-950/40 text-amber-200" : item.status === "WARNING" ? "border-yellow-700 bg-yellow-950/30 text-yellow-200" : "border-emerald-800 bg-emerald-950/20 text-emerald-200";
-      return `<button class="text-left rounded border p-1.5 transition hover:border-cyan-400 ${statusClass}" onclick="GridApp.focusRealtimeTransformer('${item.asset_id}')"><span class="font-bold">${item.asset_id}</span> <span class="float-right">${item.status}</span><br/><span>Load ${item.load_pct}% · ${item.voltage_pu} pu · ${item.temperature_c}°C · Risk ${item.risk_pct}%</span></button>`;
+      return `<button class="w-full text-left rounded border p-2 transition hover:border-cyan-400 ${statusClass}" onclick="GridApp.focusRealtimeTransformer('${item.asset_id}')"><span class="font-bold">${item.asset_id}</span> <span class="float-right">${item.status}</span><br/><span>Load ${item.load_pct}% · ${item.voltage_pu} pu · ${item.temperature_c}°C · Risk ${item.risk_pct}%</span></button>`;
     }).join("");
 
     if (!state.realtimeLayer) return;
@@ -331,14 +323,15 @@ const GridApp = (() => {
       if (!state.isLiveStreaming) return;
 
       // Realistic SCADA frequency micro-jitter around 59.98 Hz
-      const freq = 59.98 + (Math.random() * 0.04 - 0.02);
+      const freq = 59.98 + Math.sin(Date.now() / 9000) * 0.02;
       const freqEl = document.getElementById("header-freq");
       const footerFreqEl = document.getElementById("footer-freq");
       if (freqEl) freqEl.innerText = `${freq.toFixed(2)} Hz`;
       if (footerFreqEl) footerFreqEl.innerText = `${freq.toFixed(2)} Hz`;
 
-      // Live demand fluctuation
-      const deltaDemand = (Math.random() * 0.04 - 0.02);
+      // Smooth deterministic display-only aggregate, aligned with the backend
+      // telemetry cadence. Asset values themselves always come from /api/live/grid.
+      const deltaDemand = Math.sin(Date.now() / 12000) * 0.02;
       const currentDemand = (state.baseLoad + deltaDemand).toFixed(2);
       const demandPct = ((deltaDemand / state.baseLoad) * 100 + 1.2).toFixed(1);
       const footerDemandEl = document.getElementById("footer-demand");
@@ -346,20 +339,6 @@ const GridApp = (() => {
         footerDemandEl.innerHTML = `${currentDemand} GW <span class="text-[10px] text-emerald-400 font-normal font-sans">+${demandPct}%</span>`;
       }
 
-      // Micro-jitter on selected node telemetry if in normal range
-      if (state.selectedNodeId === "T17" && !state.isSimulating) {
-        const loadJitter = (84.2 + (Math.random() * 0.4 - 0.2)).toFixed(1);
-        const voltJitter = (0.972 + (Math.random() * 0.002 - 0.001)).toFixed(3);
-        const tempJitter = (71.0 + (Math.random() * 0.2 - 0.1)).toFixed(1);
-
-        const loadEl = document.getElementById("ins-load");
-        const voltEl = document.getElementById("ins-volt");
-        const tempEl = document.getElementById("ins-temp");
-
-        if (loadEl) loadEl.innerText = `${loadJitter}%`;
-        if (voltEl) voltEl.innerText = `${voltJitter} pu`;
-        if (tempEl) tempEl.innerText = `${tempJitter} °C`;
-      }
     }, 1500);
   }
 
@@ -425,16 +404,10 @@ const GridApp = (() => {
 
   async function fetchInitialTopology() {
     try {
-      const res = await fetch(`${API_BASE}/api/grid/topology`);
-      if (!res.ok) throw new Error(`Topology request failed (${res.status})`);
-      const gridState = await res.json();
-      const predRes = await fetch(`${API_BASE}/api/predict`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(gridState)
-      });
-      const modelOut = await predRes.json();
-      renderState(gridState, modelOut.model_output);
+      const res = await fetch(`${API_BASE}/api/live/grid`);
+      if (!res.ok) throw new Error(`Live grid request failed (${res.status})`);
+      const payload = await res.json();
+      renderState(payload.grid_state, payload.model_output);
     } catch (err) {
       console.warn("Backend unavailable; showing the built-in India grid baseline.", err);
       renderState(buildOfflineBaseline(), buildOfflinePrediction());
@@ -462,7 +435,7 @@ const GridApp = (() => {
     return {
       node_risk: nodeRisk,
       root_cause_ranking: [{ node: "T17", explained_by_upstream: false }],
-      cascade_path: ["T17", "F8", "T21", "S4"],
+      cascade_path: ["T17", "F8", "S4"],
       cascade_risk_pct: 86,
       confidence_interval: {},
       time_to_critical_hours: { T17: 6.2 }
@@ -478,8 +451,37 @@ const GridApp = (() => {
 
     renderLeafletLayers(gridState, modelOutput);
     updateMetricsAndPanels(gridState, modelOutput);
+    updateQuickFocus(gridState);
+    updateLiveAlerts(gridState, modelOutput);
     updateInspectorPanel(state.selectedNodeId);
     updateSignalChain(state.selectedNodeId);
+  }
+
+  function updateQuickFocus(gridState) {
+    const container = document.getElementById("asset-quick-focus");
+    if (!container) return;
+    const categories = [["transformer", "TRANSFORMERS"], ["feeder", "FEEDERS"], ["substation", "SUBSTATIONS"]];
+    container.innerHTML = categories.map(([type, label]) => {
+      const assets = (gridState.nodes || []).filter((node) => node.type === type);
+      const critical = assets.filter((node) => node.status === "critical" || node.status === "root_cause").length;
+      const warning = assets.filter((node) => node.status === "warning" || node.status === "high_risk").length;
+      return `<button onclick="GridApp.selectCategory('${type}')" class="w-full rounded-lg border border-slate-800 bg-slate-900/70 p-3 text-left transition hover:border-cyan-500/50"><span class="font-bold text-slate-200">${label}</span><span class="float-right text-cyan-300">${assets.length} nodes</span><br/><span class="mt-1 block text-[10px] font-mono text-slate-400">Healthy: ${assets.length - warning - critical} · Warning: ${warning} · Critical: ${critical}</span></button>`;
+    }).join("");
+  }
+
+  // Alerts are derived from the same authoritative live snapshot as the map.
+  function updateLiveAlerts(gridState, modelOutput) {
+    const list = document.getElementById("alerts-container");
+    const badge = document.getElementById("alert-count-badge");
+    if (!list || !badge) return;
+    const risks = modelOutput.node_risk || {};
+    const active = (gridState.nodes || []).filter((node) => node.status === "root_cause" || node.status === "critical" || node.status === "warning" || Number(risks[node.id]) >= 0.30).sort((a, b) => Number(risks[b.id] || 0) - Number(risks[a.id] || 0)).slice(0, 7);
+    badge.innerText = `${active.length} LIVE ALERT${active.length === 1 ? "" : "S"}`;
+    list.innerHTML = active.length ? active.map((node) => {
+      const f = node.features || {}, risk = Number(risks[node.id] || node.risk_score || 0);
+      const critical = node.status === "root_cause" || node.status === "critical" || risk >= 0.70;
+      return `<button class="w-full text-left rounded border p-2 transition hover:border-cyan-400 ${critical ? "border-rose-600 bg-rose-950/50 text-rose-200" : "border-red-700 bg-red-950/30 text-red-100"}" onclick="GridApp.focusNode('${node.id}')"><span class="font-bold">${node.id}</span><span class="float-right">${node.status === "root_cause" ? "ROOT CAUSE" : critical ? "CRITICAL" : "WARNING"}</span><br/><span>Load ${f.load_pct}% · ${f.voltage_pu} pu · ${f.temperature_c}°C · Risk ${(risk * 100).toFixed(1)}%</span></button>`;
+    }).join("") : `<div class="rounded border border-emerald-800 bg-emerald-950/20 p-2 text-emerald-200">No active operating alerts.</div>`;
   }
 
   /**
@@ -574,7 +576,7 @@ const GridApp = (() => {
       if (!geo) return;
 
       const risk = nodeRisk[node.id] || 0.05;
-      const isRootCause = (node.id === trueRootNodeId && risk > 0.5);
+      const isRootCause = node.status === "root_cause" || (node.id === trueRootNodeId && risk > 0.20);
       const isSymptom = rootCauses.some(rc => (rc.node || rc.node_id) === node.id && rc.explained_by_upstream);
 
       // Filtering check
@@ -584,19 +586,19 @@ const GridApp = (() => {
       if (statusFilter === "critical" && risk < 0.70) return;
 
       let markerClass = "marker-healthy";
-      if (node.status === "TRIPPED") {
+      if (node.status === "TRIPPED" || node.status === "critical") {
         markerClass = "marker-critical";
       } else if (isRootCause) {
         markerClass = "marker-root-cause";
       } else if (risk >= 0.70) {
         markerClass = "marker-critical";
-      } else if (risk >= 0.30) {
+      } else if (node.status === "warning" || node.status === "high_risk" || risk >= 0.30) {
         markerClass = "marker-alert";
       }
 
       const isSub = (node.type === "substation");
-      const isCrit = (risk >= 0.70 || isRootCause || node.status === "TRIPPED");
-      const isAlert = (risk >= 0.30 && risk < 0.70);
+      const isCrit = (risk >= 0.70 || isRootCause || node.status === "TRIPPED" || node.status === "critical");
+      const isAlert = (!isCrit && (node.status === "warning" || node.status === "high_risk" || risk >= 0.30));
 
       // Clean, professional SCADA Marker with Permanent City & Asset Label
       const iconHtml = `
@@ -792,6 +794,13 @@ const GridApp = (() => {
     }
   }
 
+  function selectCategory(type) {
+    const filter = document.getElementById("mapTypeFilter");
+    if (filter) filter.value = type;
+    filterMarkers();
+    setTimeout(fitAllBounds, 0);
+  }
+
   function fitAllBounds() {
     if (state.markersLayer && state.markersLayer.getLayers().length > 0) {
       state.map.fitBounds(state.markersLayer.getBounds(), { padding: [30, 30] });
@@ -811,14 +820,14 @@ const GridApp = (() => {
     const geo = getNodeGeo(node) || { name: nodeId, city: "Regional Grid", category: "Transformer" };
     const feats = node.features || {};
     const risk = (state.currentModelOutput.node_risk || {})[nodeId] || 0.1;
-    const ttc = (state.currentModelOutput.time_to_critical_hours || {})[nodeId] || 12.0;
+    const ttc = (state.currentModelOutput.time_to_critical_hours || {})[nodeId];
 
     document.getElementById("ins-asset-name").innerText = `${nodeId} — ${geo.name}`;
     document.getElementById("ins-location").innerText = `${geo.city} • ${geo.category.toUpperCase()}`;
     document.getElementById("ins-load").innerText = `${feats.load_pct}%`;
     document.getElementById("ins-volt").innerText = `${feats.voltage_pu} pu`;
     document.getElementById("ins-temp").innerText = `${feats.temperature_c} °C`;
-    document.getElementById("ins-ttc").innerText = `${ttc} hrs`;
+    document.getElementById("ins-ttc").innerText = Number.isFinite(ttc) ? `${ttc} hrs` : "—";
 
     const statusBadge = document.getElementById("ins-status-badge");
     if (statusBadge) {
@@ -902,11 +911,12 @@ const GridApp = (() => {
       }
     } else {
       if (headerStatus) {
-        headerStatus.innerText = "98.4% STABLE";
+        const health = Number(gridState.overall_health_pct || 100).toFixed(1);
+        headerStatus.innerText = `${health}% STABLE`;
         headerStatus.className = "px-2 py-0.5 rounded text-[11px] font-bold badge-healthy";
       }
       if (footerStability) {
-        footerStability.innerText = "98.4% STABLE";
+        footerStability.innerText = `${Number(gridState.overall_health_pct || 100).toFixed(1)}% STABLE`;
         footerStability.className = "text-sm font-extrabold text-emerald-400";
       }
     }
@@ -933,8 +943,15 @@ const GridApp = (() => {
     if (topRc) {
       const rcNodeEl = document.getElementById("rc-node-id");
       const rcScoreEl = document.getElementById("rc-score-badge");
-      if (rcNodeEl) rcNodeEl.innerText = `${topRc.node} — TRUE ROOT CAUSE`;
-      if (rcScoreEl) rcScoreEl.innerText = `${Math.round(topRc.root_cause_score * 100)}% Score`;
+      const rootNodeId = topRc.node || topRc.node_id || state.selectedNodeId;
+      // Older scenario fixtures omit attribution score.  Derive a meaningful
+      // value from the model risk instead of rendering an untrustworthy NaN.
+      const rawScore = Number(topRc.root_cause_score);
+      const rootScore = Number.isFinite(rawScore)
+        ? rawScore
+        : Number((modelOutput.node_risk || {})[rootNodeId]) || 0;
+      if (rcNodeEl) rcNodeEl.innerText = `${rootNodeId} — TRUE ROOT CAUSE`;
+      if (rcScoreEl) rcScoreEl.innerText = `${Math.round(rootScore * 100)}% Score`;
     }
 
     const rec = modelOutput.recommended_intervention || {
@@ -974,7 +991,7 @@ const GridApp = (() => {
       console.error("Simulation error", err);
     } finally {
       state.isSimulating = false;
-      if (btn) btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i> <span>Inject Stress</span>`;
+      if (btn) btn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i> <span>Run simulation</span>`;
       if (window.lucide) lucide.createIcons();
     }
   }
@@ -1057,11 +1074,11 @@ const GridApp = (() => {
         focusNode("T17");
         break;
       case 5:
-        document.getElementById("demo-step-text").innerText = `5. Root cause, not symptom: "T17, T21, and F8 all show elevated risk. GridSense isolates T17 as the true origin."`;
+        document.getElementById("demo-step-text").innerText = `5. Root cause, not symptom: "T17 and F8 show elevated risk. GridSense isolates T17 as the true origin."`;
         focusNode("T17");
         break;
       case 6:
-        document.getElementById("demo-step-text").innerText = `6. Cascade path: "Predicted propagation path T17 -> F8 -> T21 -> S4 with 86% regional risk."`;
+        document.getElementById("demo-step-text").innerText = `6. Cascade path: "Predicted propagation path T17 -> F8 -> S4 with 86% regional risk."`;
         state.showCascadePath = true;
         if (state.currentGridState && state.currentModelOutput) {
           renderLeafletLayers(state.currentGridState, state.currentModelOutput);
@@ -1221,6 +1238,7 @@ const GridApp = (() => {
     selectCity,
     searchNode,
     filterMarkers,
+    selectCategory,
     fitAllBounds,
     toggleLiveStream,
     toggleTheme,

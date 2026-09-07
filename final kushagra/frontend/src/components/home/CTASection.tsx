@@ -29,8 +29,8 @@ export function CTASection() {
             Explore the National Grid.
           </h2>
           <p className="text-gs-text-secondary text-lg leading-relaxed mb-10">
-            Enter our interactive 3D digital twin of India's electricity network.
-            Inspect substations, transformers and transmission corridors —
+            Enter our interactive 3D digital twin of India&apos;s electricity network.
+            Inspect substations, transformers and transmission corridors,
             powered by live AI predictions.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">

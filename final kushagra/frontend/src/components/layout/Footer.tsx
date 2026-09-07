@@ -8,11 +8,11 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gs-blue-500 to-gs-cyan-500 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-md bg-gradient-to-br from-gs-cyan-500 to-gs-blue-500 flex items-center justify-center">
                 <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <div>
-                <div className="text-white font-bold">GridSense</div>
+                <div className="gs-display text-gs-text-primary text-lg font-bold uppercase">GridSense</div>
                 <div className="text-[9px] uppercase tracking-widest text-gs-text-tertiary">
                   Grid Intelligence Platform
                 </div>
@@ -25,34 +25,34 @@ export function Footer() {
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-white mb-4">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gs-text-primary mb-4">
               Platform
             </h4>
             <ul className="space-y-2 text-xs">
-              <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
-              <li><Link href="/about" className="hover:text-white transition-colors">About</Link></li>
-              <li><Link href="/map-explorer" className="hover:text-white transition-colors">Map Explorer</Link></li>
-              <li><Link href="/intelligence" className="hover:text-white transition-colors">Intelligence</Link></li>
-              <li><Link href="/analytics" className="hover:text-white transition-colors">Analytics</Link></li>
-              <li><Link href="/alerts" className="hover:text-white transition-colors">Alerts</Link></li>
+              <li><Link href="/" className="hover:text-gs-text-primary transition-colors">Home</Link></li>
+              <li><Link href="/about" className="hover:text-gs-text-primary transition-colors">About</Link></li>
+              <li><Link href="/map-explorer" className="hover:text-gs-text-primary transition-colors">Map Explorer</Link></li>
+              <li><Link href="/intelligence" className="hover:text-gs-text-primary transition-colors">Intelligence</Link></li>
+              <li><Link href="/analytics" className="hover:text-gs-text-primary transition-colors">Analytics</Link></li>
+              <li><Link href="/alerts" className="hover:text-gs-text-primary transition-colors">Alerts</Link></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-white mb-4">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gs-text-primary mb-4">
               Resources
             </h4>
             <ul className="space-y-2 text-xs">
-              <li><Link href="/documentation" className="hover:text-white transition-colors">Documentation</Link></li>
-              <li><a href="#" className="hover:text-white transition-colors">Privacy</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Security</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Terms of Use</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Accessibility</a></li>
+              <li><Link href="/documentation" className="hover:text-gs-text-primary transition-colors">Documentation</Link></li>
+              <li><a href="#" className="hover:text-gs-text-primary transition-colors">Privacy</a></li>
+              <li><a href="#" className="hover:text-gs-text-primary transition-colors">Security</a></li>
+              <li><a href="#" className="hover:text-gs-text-primary transition-colors">Terms of Use</a></li>
+              <li><a href="#" className="hover:text-gs-text-primary transition-colors">Accessibility</a></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-white mb-4">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-gs-text-primary mb-4">
               System Status
             </h4>
             <ul className="space-y-2 text-xs">
@@ -74,7 +74,7 @@ export function Footer() {
 
         <div className="mt-12 pt-6 border-t border-gs-border flex flex-col md:flex-row justify-between gap-4">
           <p className="text-[11px] text-gs-text-muted">
-            © 2026 GridSense — Grid Intelligence Platform. All rights reserved.
+            © 2026 GridSense - Grid Intelligence Platform. All rights reserved.
           </p>
           <p className="text-[11px] text-gs-text-muted font-mono">
             Version 2.1.0 · Model GraphSAGE-v2

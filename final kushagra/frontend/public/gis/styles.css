@@ -1,28 +1,25 @@
 /* GridSense Enterprise Dark Theme Styling */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
 :root {
-  --bg-primary: #080c14;
-  --bg-secondary: #0d1322;
-  --bg-card: rgba(15, 23, 42, 0.75);
-  --bg-card-hover: rgba(30, 41, 59, 0.85);
-  --border-color: rgba(51, 65, 85, 0.5);
-  --border-glow: rgba(56, 189, 248, 0.25);
+  --bg-primary: #050816;
+  --bg-secondary: #0A1024;
+  --bg-card: rgba(15, 23, 42, 0.94);
+  --bg-card-hover: #16213A;
+  --border-color: #1E293B;
+  --border-glow: rgba(34, 211, 238, 0.25);
   
-  --color-emerald: #10b981;
-  --color-emerald-glow: rgba(16, 185, 129, 0.35);
-  --color-amber: #f59e0b;
-  --color-amber-glow: rgba(245, 158, 11, 0.35);
-  --color-crimson: #ef4444;
-  --color-crimson-glow: rgba(239, 68, 68, 0.45);
-  --color-cyan: #06b6d4;
-  --color-cyan-glow: rgba(6, 182, 212, 0.35);
-  --color-blue: #3b82f6;
-  --color-purple: #8b5cf6;
+  --color-emerald: #34D399;
+  --color-emerald-glow: rgba(52, 211, 153, 0.25);
+  --color-amber: #F59E0B;
+  --color-amber-glow: rgba(245, 158, 11, 0.25);
+  --color-crimson: #EF4444;
+  --color-crimson-glow: rgba(239, 68, 68, 0.3);
+  --color-cyan: #22D3EE;
+  --color-cyan-glow: rgba(34, 211, 238, 0.25);
+  --color-blue: #3B82F6;
   
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
 }
 
 * {
@@ -32,21 +29,21 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
   background-image: 
-    radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 85% 85%, rgba(139, 92, 246, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 15% 15%, rgba(34, 211, 238, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
     linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
 }
 
 .mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", "Cascadia Mono", monospace;
 }
 
 /* Glassmorphism Cards */
@@ -61,7 +58,7 @@ body {
 }
 
 .glass-panel:hover {
-  border-color: rgba(56, 189, 248, 0.4);
+  border-color: rgba(34, 211, 238, 0.45);
 }
 
 .glow-emerald {
@@ -109,9 +106,9 @@ input[type=range]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #06b6d4;
+  background: var(--color-cyan);
   cursor: pointer;
-  box-shadow: 0 0 10px #06b6d4;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.35);
   transition: transform 0.15s ease;
 }
 
@@ -188,8 +185,8 @@ input[type=range]::-webkit-slider-thumb:hover {
   transition: all 0.2s ease;
 }
 .step-pill.active {
-  background: #06b6d4;
-  color: #080c14;
+  background: var(--color-cyan);
+  color: var(--bg-primary);
   font-weight: 700;
   box-shadow: 0 0 12px rgba(6, 182, 212, 0.5);
 }
@@ -208,7 +205,7 @@ input[type=range]::-webkit-slider-thumb:hover {
 .signal-chain-line {
   stroke-dasharray: 8 6;
   animation: signal-flow 0.9s linear infinite;
-  filter: drop-shadow(0 0 4px rgba(6, 182, 212, 0.9));
+  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.8));
 }
 
 /* Standalone GIS light mode. The map tile layer is already light OpenStreetMap. */
@@ -239,3 +236,17 @@ body.light-theme header .text-slate-300 { color: #334155 !important; }
 body.light-theme .glass-panel .bg-slate-900,
 body.light-theme select,
 body.light-theme input { background-color: #f8fafc !important; color: #0f172a !important; }
+
+/* The GIS markup uses Tailwind utility classes for its dense control-room
+   menus.  In light mode every neutral surface must change together, rather
+   than leaving isolated dark filters or inspector rows behind. */
+body.light-theme [class*="bg-slate-"],
+body.light-theme [class*="bg-[#"] { background-color: #ffffff !important; }
+body.light-theme [class*="border-slate-"] { border-color: #d7e0e8 !important; }
+body.light-theme [class*="text-slate-100"],
+body.light-theme [class*="text-slate-200"],
+body.light-theme [class*="text-slate-300"] { color: #0f172a !important; }
+body.light-theme [class*="text-slate-400"],
+body.light-theme [class*="text-slate-500"] { color: #475569 !important; }
+body.light-theme .leaflet-control,
+body.light-theme .leaflet-control a { background-color: #ffffff !important; color: #0f172a !important; }

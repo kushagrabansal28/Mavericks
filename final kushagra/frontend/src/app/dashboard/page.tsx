@@ -10,6 +10,7 @@ import { Legend } from "@/components/dashboard/Legend";
 import { WhatIfSimulator } from "@/components/dashboard/WhatIfSimulator";
 import { DemoControls } from "@/components/dashboard/DemoControls";
 import { SimulationBanner } from "@/components/dashboard/SimulationBanner";
+import { LiveTelemetryUpdater } from "@/components/dashboard/LiveTelemetryUpdater";
 
 export default function DashboardPage() {
   const { setGridState, setPrediction, showNodeDetail, isDemoMode, setProcessing } = useGridStore();
@@ -44,6 +45,7 @@ export default function DashboardPage() {
   return (
     <>
       <Navbar variant="dark" />
+      <LiveTelemetryUpdater />
       <main className="pt-16 h-screen w-screen flex flex-col bg-gs-navy-950 overflow-hidden">
         <SimulationBanner />
         <div className="flex-1 flex overflow-hidden relative">

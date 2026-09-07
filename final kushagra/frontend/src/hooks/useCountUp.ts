@@ -8,12 +8,9 @@ export function useCountUp(
 ) {
   const [value, setValue] = useState(0);
   const rafRef = useRef<number | null>(null);
-  const startedRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled || startedRef.current) return;
-    startedRef.current = true;
-
+    if (!enabled) return;
     const startTime = performance.now();
     const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 

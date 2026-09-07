@@ -1,197 +1,88 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, Moon, Sun, X, Zap } from "lucide-react";
+import { Activity, BrainCircuit, ChevronDown, Map, Menu, Moon, Radar, ShieldAlert, Sun, X, Zap, Settings } from "lucide-react";
 
-const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/about", label: "About Us" },
-  { href: "/map-explorer", label: "Map Explorer" },
-  { href: "/operations", label: "Operations" },
-  { href: "/intelligence", label: "Intelligence" },
-  { href: "/analytics", label: "Analytics" },
-  { href: "/custom-data", label: "Custom Data" },
-  { href: "/alerts", label: "Alerts" },
-  { href: "/documentation", label: "Resources" },
+type NavItem = { href: string; label: string; description: string; icon: typeof Map };
+type NavGroup = { label: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  { label: "Explore", items: [
+    { href: "/map-explorer", label: "Map Explorer", description: "Live GIS telemetry and topology", icon: Map },
+    { href: "/dashboard", label: "Digital Twin", description: "3D risk and cascade workspace", icon: Radar },
+  ] },
+  { label: "Command", items: [
+    { href: "/operations", label: "Operations", description: "Act on live grid conditions", icon: Activity },
+    { href: "/alerts", label: "Alert Center", description: "Triage, assign and resolve risk", icon: ShieldAlert },
+  ] },
+  { label: "Intelligence", items: [
+    { href: "/intelligence", label: "AI Intelligence", description: "Forecasting and root-cause analysis", icon: BrainCircuit },
+    { href: "/analytics", label: "Analytics", description: "Grid performance and risk signals", icon: Activity },
+  ] },
 ];
 
-export function Navbar({ variant = "light" }: { variant?: "light" | "dark" | "transparent" }) {
+const UTILITY_LINKS = [
+  { href: "/custom-data", label: "Custom Data" },
+  { href: "/documentation", label: "Resources" },
+  { href: "/about", label: "About" },
+];
+
+export function Navbar({ variant: _variant = "dark" }: { variant?: "light" | "dark" | "transparent" }) {
+  void _variant;
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof window === "undefined") return "dark";
+    return window.localStorage.getItem("gridsense-theme") === "light" ? "light" : "dark";
+  });
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 28);
     onScroll();
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem("gridsense-theme") as "dark" | "light" | null;
-    const nextTheme = savedTheme || "dark";
-    setTheme(nextTheme);
-    document.documentElement.dataset.theme = nextTheme;
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === "gridsense-theme" && (event.newValue === "dark" || event.newValue === "light")) {
-        setTheme(event.newValue);
-        document.documentElement.dataset.theme = event.newValue;
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
   const toggleTheme = () => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
-    document.documentElement.dataset.theme = nextTheme;
-    window.localStorage.setItem("gridsense-theme", nextTheme);
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    window.localStorage.setItem("gridsense-theme", next);
   };
-
-  const isDarkContext = theme === "dark" && (variant === "dark" || variant === "transparent");
-
-  const bgClass = !scrolled && variant === "transparent"
-    ? "bg-transparent border-transparent"
-    : isDarkContext
-    ? "bg-gs-bg-primary/85 backdrop-blur-lg border-gs-border"
-    : "bg-white/95 backdrop-blur-md border-gs-gray-200";
-
-  const textClass = isDarkContext ? "text-gs-text-primary" : "text-gs-gray-900";
-  const secondaryTextClass = isDarkContext ? "text-gs-text-secondary" : "text-gs-gray-600";
-  const linkHoverClass = isDarkContext ? "hover:text-gs-cyan-400" : "hover:text-gs-blue-600";
+  const isDark = theme === "dark";
+  const isCurrent = (href: string) => pathname === href;
 
   return (
-    <header
-      className={`fixed top-0 left-0 right-0 z-50 border-b transition-all duration-300 ${bgClass} ${
-        scrolled ? "h-14" : "h-16"
-      }`}
-    >
-      <div className="container-official h-full flex items-center justify-between">
-        <Link href="/" className={`group flex items-center gap-2.5 ${textClass}`}>
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-gs-blue-500 to-gs-cyan-500 flex items-center justify-center transition-transform group-hover:scale-105">
-            <Zap className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-bold tracking-tight">GridSense</div>
-            <div className={`text-[9px] font-medium uppercase tracking-widest ${secondaryTextClass}`}>
-              National Grid Intelligence
-            </div>
-          </div>
+    <header className={`gs-nav fixed inset-x-0 top-0 z-50 transition-all duration-500 ${scrolled ? "gs-nav-scrolled" : ""}`}>
+      <div className="mx-auto flex h-[76px] max-w-[1480px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+        <Link href="/" className="gs-nav-brand group flex shrink-0 items-center gap-2.5" aria-label="GridSense home">
+          <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-gradient-to-br from-gs-cyan-500 to-gs-blue-500 shadow-[0_0_24px_rgba(34,211,238,.22)] transition-transform duration-300 group-hover:scale-105"><Zap className="h-[18px] w-[18px] text-gs-bg-primary" strokeWidth={2.6} /></span>
+          <span className="hidden leading-none sm:block"><span className="gs-display block text-[20px] uppercase tracking-[-.06em] text-gs-text-primary">GridSense</span><span className="mt-1 block font-mono text-[8px] font-bold uppercase tracking-[.16em] text-gs-text-muted">Grid intelligence</span></span>
         </Link>
-
-        <nav className="hidden lg:flex items-center gap-1">
-          {NAV_LINKS.map((link) => {
-            const active = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`relative px-3 py-2 text-[13px] font-medium rounded-md transition-colors ${textClass} ${linkHoverClass} ${
-                  active ? (isDarkContext ? "text-gs-cyan-400" : "text-gs-blue-600") : ""
-                }`}
-              >
-                {link.label}
-                {active && (
-                  <span
-                    className={`absolute left-2 right-2 -bottom-0.5 h-0.5 rounded-full ${
-                      isDarkContext ? "bg-gs-cyan-500" : "bg-gs-blue-500"
-                    }`}
-                  />
-                )}
-              </Link>
-            );
+        <nav className="hidden h-full items-center gap-1 xl:flex" aria-label="Main navigation">
+          {NAV_GROUPS.map((group) => {
+            const active = group.items.some((item) => isCurrent(item.href));
+            const open = openGroup === group.label;
+            return <div key={group.label} className="relative h-full">
+              <button className={`gs-nav-trigger ${active ? "gs-nav-trigger-active" : ""}`} onClick={() => setOpenGroup(open ? null : group.label)} aria-expanded={open}>{group.label}<ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} /></button>
+              {open && <div className="gs-mega-menu"><span className="gs-mega-kicker">{group.label} workspace</span>{group.items.map(({ href, label, description, icon: Icon }) => <Link key={href} href={href} className={`gs-mega-item ${isCurrent(href) ? "gs-mega-item-active" : ""}`} onClick={() => setOpenGroup(null)}><span className="gs-mega-icon"><Icon className="h-4 w-4" strokeWidth={1.8} /></span><span><span className="block text-sm font-semibold text-gs-text-primary">{label}</span><span className="mt-0.5 block text-xs text-gs-text-secondary">{description}</span></span></Link>)}</div>}
+            </div>;
           })}
+          <span className="mx-2 h-4 w-px bg-gs-border" />
+          {UTILITY_LINKS.map((item) => <Link key={item.href} href={item.href} className={`gs-nav-link ${isCurrent(item.href) ? "gs-nav-link-active" : ""}`}>{item.label}</Link>)}
         </nav>
-
-        <div className="hidden lg:flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            className={`p-1.5 rounded-md border transition-colors ${
-              isDarkContext
-                ? "border-gs-border text-gs-cyan-300 hover:bg-gs-bg-panel"
-                : "border-gs-gray-300 text-gs-gray-700 hover:bg-gs-gray-50"
-            }`}
-          >
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-          <Link
-            href="/login"
-            className={`px-4 py-1.5 text-[13px] font-medium rounded-md border transition-colors ${
-              isDarkContext
-                ? "border-gs-border text-gs-text-primary hover:bg-gs-bg-panel"
-                : "border-gs-gray-300 text-gs-gray-700 hover:bg-gs-gray-50"
-            }`}
-          >
-            Login
-          </Link>
-          <Link
-            href="/map-explorer"
-            className={`px-4 py-1.5 text-[13px] font-semibold rounded-md transition-colors ${
-              isDarkContext
-                ? "bg-gs-cyan-500 text-gs-bg-primary hover:bg-gs-cyan-400"
-                : "bg-gs-blue-500 text-white hover:bg-gs-blue-600"
-            }`}
-          >
-            Get Started
-          </Link>
-        </div>
-
-        <button
-          className={`lg:hidden ${textClass}`}
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Toggle menu"
-        >
-          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        <div className="ml-auto hidden items-center gap-2 xl:flex"><span className="mr-2 flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-[.12em] text-gs-text-secondary"><i className="gs-live-dot" />Network live</span><button onClick={toggleTheme} className="gs-nav-icon" aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}>{isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button><Link href="/login" className="gs-nav-login">Operator login</Link><Link href="/admin" className="gs-nav-login inline-flex items-center gap-1"><Settings className="h-3.5 w-3.5" />Admin portal</Link><Link href="/map-explorer" className="gs-nav-cta">Launch twin <Zap className="h-3.5 w-3.5" /></Link></div>
+        <button className="ml-auto grid h-10 w-10 place-items-center text-gs-text-primary xl:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle navigation">{mobileOpen ? <X /> : <Menu />}</button>
       </div>
-
-      {mobileOpen && (
-        <div className={`lg:hidden absolute top-full left-0 right-0 border-b shadow-lg ${
-          isDarkContext ? "bg-gs-bg-secondary border-gs-border" : "bg-white border-gs-gray-200"
-        }`}>
-          <nav className="container-official py-4 flex flex-col gap-1">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={`px-3 py-2.5 text-sm font-medium rounded-md ${
-                  pathname === link.href
-                    ? isDarkContext ? "text-gs-cyan-400 bg-gs-bg-panel" : "text-gs-blue-600 bg-gs-blue-50"
-                    : isDarkContext ? "text-gs-text-primary hover:bg-gs-bg-panel" : "text-gs-gray-800 hover:bg-gs-gray-50"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-            <div className="mt-2 pt-2 border-t border-gs-border flex gap-2">
-              <Link
-                href="/login"
-                onClick={() => setMobileOpen(false)}
-                className={`flex-1 text-center px-4 py-2 text-sm font-medium rounded-md border ${
-                  isDarkContext ? "border-gs-border text-white" : "border-gs-gray-300 text-gs-gray-700"
-                }`}
-              >
-                Login
-              </Link>
-              <Link
-                href="/map-explorer"
-                onClick={() => setMobileOpen(false)}
-                className={`flex-1 text-center px-4 py-2 text-sm font-semibold rounded-md ${
-                  isDarkContext ? "bg-gs-cyan-500 text-gs-bg-primary" : "bg-gs-blue-500 text-white"
-                }`}
-              >
-                Get Started
-              </Link>
-            </div>
-          </nav>
-        </div>
-      )}
+      {mobileOpen && <div className="gs-mobile-menu xl:hidden"><div className="mx-auto grid max-w-[1480px] gap-4 px-4 py-5 sm:px-6">{NAV_GROUPS.map((group) => <div key={group.label}><p className="gs-mega-kicker mb-2">{group.label}</p>{group.items.map(({ href, label, description, icon: Icon }) => <Link key={href} href={href} onClick={() => setMobileOpen(false)} className="gs-mega-item"><span className="gs-mega-icon"><Icon className="h-4 w-4" /></span><span><span className="block text-sm font-semibold text-gs-text-primary">{label}</span><span className="block text-xs text-gs-text-secondary">{description}</span></span></Link>)}</div>)}<div className="grid grid-cols-2 gap-2 border-t border-gs-border pt-4">{UTILITY_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className="gs-nav-login text-center">{item.label}</Link>)}<button onClick={toggleTheme} className="gs-nav-login">{isDark ? "Light mode" : "Dark mode"}</button></div></div></div>}
     </header>
   );
 }
